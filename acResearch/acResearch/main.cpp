@@ -591,150 +591,152 @@ private:
 
 int main(int argc, const char* argv[])
 {
-	// 画像読み込み
-	//for (int i = 1; i <= 10; i++) {
-	int i = 10;
+	vector<int> images = { 10 };
 
-	//string image_path = "C://Users/sst/Pictures/res/p" + to_string(i) + ".jpg";
-	string image_path = "C://Users/NEC-PCuser/Pictures/res/p" + to_string(i) + ".jpg";
+	for (int i = 0; i < images.size(); i++) {
 
-	Mat orig_image,
-		orig_image_grayscale,
-		resized_image,
-		resized_image_grayscale,
-		process_image;
+		int image_no = images[i];
 
-	/* 元画像はカラーとグレースケールを保持しておく */
-	orig_image = cv::imread(image_path, IMREAD_COLOR);
-	orig_image_grayscale = cv::imread(image_path, IMREAD_GRAYSCALE);
+		//string image_path = "C://Users/sst/Pictures/res/p" + to_string(image_no) + ".jpg";
+		string image_path = "C://Users/NEC-PCuser/Pictures/res/p" + to_string(image_no) + ".jpg";
 
-	/* 元画像を640*480にリサイズ */
-	resize(orig_image, resized_image, Size(IMAGE_WIDTH, IMAGE_HEIGHT), 0, 0, INTER_LINEAR);
-	resize(orig_image_grayscale, resized_image_grayscale, Size(IMAGE_WIDTH, IMAGE_HEIGHT), 0, 0, INTER_LINEAR);
+		Mat orig_image,
+			orig_image_grayscale,
+			resized_image,
+			resized_image_grayscale,
+			process_image;
 
-	/* 処理用の画像 */
-	process_image = resized_image_grayscale.clone();
+		/* 元画像はカラーとグレースケールを保持しておく */
+		orig_image = cv::imread(image_path, IMREAD_COLOR);
+		orig_image_grayscale = cv::imread(image_path, IMREAD_GRAYSCALE);
 
-	/* 元画像を表示 */
-	imshow("元画像", resized_image);
-	waitKey();
+		/* 元画像を640*480にリサイズ */
+		resize(orig_image, resized_image, Size(IMAGE_WIDTH, IMAGE_HEIGHT), 0, 0, INTER_LINEAR);
+		resize(orig_image_grayscale, resized_image_grayscale, Size(IMAGE_WIDTH, IMAGE_HEIGHT), 0, 0, INTER_LINEAR);
 
-	/*  */
-	Mat blured_resized_image_grayscale;
-	GaussianBlur(resized_image_grayscale, blured_resized_image_grayscale, Size(7, 7), 0);
+		/* 処理用の画像 */
+		process_image = resized_image_grayscale.clone();
 
-	/* 明度画像 */
-	Mat value_image = GuideBoard::GetValue(resized_image);
+		/* 元画像を表示 */
+		imshow("元画像", resized_image);
+		waitKey();
 
-	Mat blured_resized_image;
-	GaussianBlur(resized_image, blured_resized_image, Size(7, 7), 0);
+		/*  */
+		Mat blured_resized_image_grayscale;
+		GaussianBlur(resized_image_grayscale, blured_resized_image_grayscale, Size(7, 7), 0);
 
-	Mat gray_image = blured_resized_image_grayscale.clone();
-	Mat hue_image = GuideBoard::GetHue(blured_resized_image);
-	Mat saturation_image = GuideBoard::GetSaturation(blured_resized_image);
+		/* 明度画像 */
+		Mat value_image = GuideBoard::GetValue(resized_image);
 
-	imshow("彩度", saturation_image);
-	waitKey();
+		Mat blured_resized_image;
+		GaussianBlur(resized_image, blured_resized_image, Size(7, 7), 0);
 
-	Mat cannied_gray,
-		cannied_hue;
+		Mat gray_image = blured_resized_image_grayscale.clone();
+		Mat hue_image = GuideBoard::GetHue(blured_resized_image);
+		Mat saturation_image = GuideBoard::GetSaturation(blured_resized_image);
 
-	Canny(gray_image, cannied_gray, 50, 75);
-	Canny(hue_image, cannied_hue, 50, 75);
+		imshow("彩度", saturation_image);
+		waitKey();
 
-	imshow("色相画像のエッジ（彩度の考慮前）", cannied_hue);
-	waitKey();
+		Mat cannied_gray,
+			cannied_hue;
 
-	/* 画像中で彩度が低い部分にエッジがあればそれを消す */
-	Mat sat_filtered_hue;
-	vector<Point> delete_point;
+		Canny(gray_image, cannied_gray, 50, 75);
+		Canny(hue_image, cannied_hue, 50, 75);
 
-	GuideBoard::RemoveEdgeOfLowSat(cannied_hue, saturation_image, sat_filtered_hue, 10, delete_point);
+		imshow("色相画像のエッジ（彩度の考慮前）", cannied_hue);
+		waitKey();
 
-	imshow("色相画像のエッジ（彩度の考慮後）", sat_filtered_hue);
-	waitKey(); //imwrite("satAfter_" + to_string(i) + ".jpg", ~hueEdgeOfSat);
+		/* 画像中で彩度が低い部分にエッジがあればそれを消す */
+		Mat sat_filtered_hue;
+		vector<Point> delete_point;
+
+		GuideBoard::RemoveEdgeOfLowSat(cannied_hue, saturation_image, sat_filtered_hue, 10, delete_point);
+
+		imshow("色相画像のエッジ（彩度の考慮後）", sat_filtered_hue);
+		waitKey(); //imwrite("satAfter_" + to_string(i) + ".jpg", ~hueEdgeOfSat);
 
 
-	/* グレースケールのエッジ画像と色相エッジ画像のエッジ部分を広げる（dilate） */
-	Mat delated_cannied_gray,
-		delated_sat_filtered_hue;
+		/* グレースケールのエッジ画像と色相エッジ画像のエッジ部分を広げる（dilate） */
+		Mat delated_cannied_gray,
+			delated_sat_filtered_hue;
 
-	dilate(cannied_gray, cannied_gray, Mat());
-	dilate(sat_filtered_hue, delated_sat_filtered_hue, Mat());
+		dilate(cannied_gray, cannied_gray, Mat());
+		dilate(sat_filtered_hue, delated_sat_filtered_hue, Mat());
 
-	/* 4点で表される領域の座標 */
-	vector< vector< Point > > apexes = GuideBoard::FindApexesByEdge(delated_sat_filtered_hue.clone(), 1000);
+		/* 4点で表される領域の座標 */
+		vector< vector< Point > > apexes = GuideBoard::FindApexesByEdge(delated_sat_filtered_hue.clone(), 1000);
 
-	if (apexes.size() == 0) {
-		cout << "四角形が検出できませんでした\n";
-		return 0;
+		if (apexes.size() == 0) {
+			cout << "四角形が検出できませんでした\n";
+			return 0;
+		}
+
+		vector<vector<int>> valueHists;
+
+		imshow("結果", value_image); waitKey();
+
+		vector<Mat> sauvola_binarized;
+
+		int valueMax = 0;
+		int valueThr = 30;
+
+		/* 明度のヒストグラムをとりながら、最も多かった明度値のインデックスも取得 */
+		for (int apexes_i = 0; apexes_i < apexes.size(); apexes_i++) {
+			Mat binarized_image;
+
+			//sauvolaFast(value, value, apexes[apexes_i], 0.15, 32);
+			Utilities::sauvolaFast(value_image, binarized_image, apexes[apexes_i], 5, 0.25, 48);
+			sauvola_binarized.push_back(binarized_image);
+
+			/* 文字や矢印（と思われる）ものの領域（2点で表される矩形領域）を取得 */
+			//vector< pair<Point, Point> > object_area = GuideBoard::GetObjectArea(binarized_image, apexes[apexes_i], 5);
+			vector< pair<Point, Point> > object_area = GuideBoard::GetObjectArea2(binarized_image, apexes[apexes_i], 5);
+
+			/*vector<int> valueHist(256, 0);
+
+			for (y = sRect[apexes_i][1].first; y <= sRect[apexes_i][1].second; y++) {
+			for (x = sRect[apexes_i][0].first; x <= sRect[apexes_i][0].second; x++) {
+			if (cn(apexes[apexes_i], Point(x, y))) {
+			valueHist[value.at<uchar>(y, x)]++;
+			}
+			}
+			}
+
+			valueHists.push_back(valueHist);
+			string t;
+
+			for (int z = 0; z < valueHist.size(); z++) {
+			t += to_string(z) + ',' + to_string(valueHist[z]) + '\n';
+			}
+
+			vector<int>::iterator iter = max_element(valueHist.begin(), valueHist.end());
+			//valueMax.push_back(distance(valueHists[k].begin(), iter));
+			valueMax = (int)(distance(valueHist.begin(), iter));
+
+			for (y = sRect[apexes_i][1].first; y <= sRect[apexes_i][1].second; y++) {
+			for (x = sRect[apexes_i][0].first; x <= sRect[apexes_i][0].second; x++) {
+			if (cn(apexes[apexes_i], Point(x, y))) {
+			if ((value.at<uchar>(y, x) > valueMax - valueThr) && (value.at<uchar>(y, x) < valueMax + valueThr)) {
+			stock.at<Vec3b>(y, x) = Vec3b(255, 255, 255);
+			}
+			else {
+			stock.at<Vec3b>(y, x) = Vec3b(0, 0, 0);
+			}
+			}
+			else {
+			stock.at<Vec3b>(y, x) = Vec3b(128, 128, 128);
+			}
+			}
+			}*/
+		}
+
+		imwrite("a.png", sauvola_binarized[0]);
+
+		imshow("結果2", sauvola_binarized[0]); waitKey();
+
+
 	}
-
-	vector<vector<int>> valueHists;
-
-	imshow("結果", value_image); waitKey();
-
-	vector<Mat> sauvola_binarized;
-
-	int valueMax = 0;
-	int valueThr = 30;
-
-	/* 明度のヒストグラムをとりながら、最も多かった明度値のインデックスも取得 */
-	for (int apexes_i = 0; apexes_i < apexes.size(); apexes_i++) {
-		Mat binarized_image;
-
-		//sauvolaFast(value, value, apexes[apexes_i], 0.15, 32);
-		Utilities::sauvolaFast(value_image, binarized_image, apexes[apexes_i], 5, 0.25, 48);
-		sauvola_binarized.push_back(binarized_image);
-
-		/* 文字や矢印（と思われる）ものの領域（2点で表される矩形領域）を取得 */
-		//vector< pair<Point, Point> > object_area = GuideBoard::GetObjectArea(binarized_image, apexes[apexes_i], 5);
-		vector< pair<Point, Point> > object_area = GuideBoard::GetObjectArea2(binarized_image, apexes[apexes_i], 5);
-
-		/*vector<int> valueHist(256, 0);
-
-		for (y = sRect[apexes_i][1].first; y <= sRect[apexes_i][1].second; y++) {
-		for (x = sRect[apexes_i][0].first; x <= sRect[apexes_i][0].second; x++) {
-		if (cn(apexes[apexes_i], Point(x, y))) {
-		valueHist[value.at<uchar>(y, x)]++;
-		}
-		}
-		}
-
-		valueHists.push_back(valueHist);
-		string t;
-
-		for (int z = 0; z < valueHist.size(); z++) {
-		t += to_string(z) + ',' + to_string(valueHist[z]) + '\n';
-		}
-
-		vector<int>::iterator iter = max_element(valueHist.begin(), valueHist.end());
-		//valueMax.push_back(distance(valueHists[k].begin(), iter));
-		valueMax = (int)(distance(valueHist.begin(), iter));
-
-		for (y = sRect[apexes_i][1].first; y <= sRect[apexes_i][1].second; y++) {
-		for (x = sRect[apexes_i][0].first; x <= sRect[apexes_i][0].second; x++) {
-		if (cn(apexes[apexes_i], Point(x, y))) {
-		if ((value.at<uchar>(y, x) > valueMax - valueThr) && (value.at<uchar>(y, x) < valueMax + valueThr)) {
-		stock.at<Vec3b>(y, x) = Vec3b(255, 255, 255);
-		}
-		else {
-		stock.at<Vec3b>(y, x) = Vec3b(0, 0, 0);
-		}
-		}
-		else {
-		stock.at<Vec3b>(y, x) = Vec3b(128, 128, 128);
-		}
-		}
-		}*/
-	}
-
-	imwrite("a.png", sauvola_binarized[0]);
-
-	imshow("結果2", sauvola_binarized[0]); waitKey();
-
-
-	//}
 
 	return 0;
 }
