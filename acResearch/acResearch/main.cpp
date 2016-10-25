@@ -5,12 +5,32 @@
 #include <map>
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <cstdlib>
 
 using namespace std;
 using namespace cv;
 
-const int IMAGE_WIDTH = 640;
-const int IMAGE_HEIGHT = 480;
+const int  IMAGE_WIDTH = 640;
+const int  IMAGE_HEIGHT = 480;
+const int  MAX_HUE = 180;
+const bool IMWRITE_TRUE = true;
+const bool IMWRITE_FALSE = false;
+const bool WAIT_TRUE = true;
+const bool WAIT_FALSE = false;
+
+const vector<Scalar> REPRESENTATIVE_COLOR =
+{
+	Scalar(19, 35, 72),
+	Scalar(138, 138, 98),
+	Scalar(10, 68, 46),
+	Scalar(118, 133, 72),
+	Scalar(114, 136, 142),
+	Scalar(153, 99, 51)
+};
+
+const vector<int> REPRESENTATIVE_HUE = { 111, 30, 78, 26, 96, 14 };
 
 class Utilities
 {
@@ -247,6 +267,19 @@ public:
 		return *max_element(vec.begin(), vec.end());
 	}
 
+	static void imageShow(string file_name, Mat image, bool is_write, bool is_wait)
+	{
+		imshow(file_name, image);
+
+		if (is_write) {
+			imwrite(file_name, image);
+		}
+
+		if (is_wait) {
+			waitKey();
+		}
+	}
+
 private:
 	static void __drawHistgram__(Mat &histgram, vector<int> row_sum, vector<int> col_sum, pair<Point, Point> circumscribed_point)
 	{
@@ -333,11 +366,15 @@ public:
 	* @brief エッジ画像から，四角形領域を探してその4頂点と、その4点を含む矩形領域の4頂点を出力
 	* @note  apexes：4点でできる領域の点座標のベクトル，sRect：4点でできる領域を囲む矩形領域の点座標のベクトル
 	*/
-	static vector< vector< Point > > FindApexesByEdge(const Mat edgeImg, const int areaThreshold)
+	static vector< vector< Point > > FindApexesByEdge(const Mat edgeImg, const int areaThreshold, Mat orig_image)
 	{
 		vector<vector<Point>> apexes;
 		vector<vector<Point>> contours;
-		findContours(edgeImg, contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+		findContours(edgeImg.clone(), contours, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE);
+
+		Mat temp = orig_image.clone();
+		drawContours(temp, contours, -1, cv::Scalar(0, 255, 255));
+		Utilities::imageShow("contours.png", temp, IMWRITE_FALSE, WAIT_TRUE);
 
 		int j = 0;
 		auto it = contours.begin();
@@ -353,7 +390,7 @@ public:
 				convexHull(contour, approx);
 
 				// 輪郭・ポリライン近似
-				approxPolyDP(approx, approx, 0.02 * cv::arcLength(contour, true), true);
+				approxPolyDP(approx, approx, 0.01 * cv::arcLength(contour, true), true);
 
 				if (approx.size() == 4) { // 頂点数4の輪郭のみが対象
 					apexes.push_back(approx); // 領域を作る4点の座標を格納
@@ -443,12 +480,12 @@ public:
 
 		/* ヒストグラムを調整 */
 		//__AdjustHistgram__(row_sum, 0.1, 5);
-		//__AdjustHistgram__(col_sum, 0.1, 5);
+		__AdjustHistgram__(col_sum, 0.1, 5);
 
 		/* ヒストグラムの区間を見つける */
 		vector<pair<int, int>> interval_x, interval_y;
-		interval_x = __ComputeInterval__(row_sum);
-		interval_y = __ComputeInterval__(col_sum);
+		interval_x = __ComputeIntervalX__(row_sum, max_x - min_x);
+		interval_y = __ComputeIntervalY__(col_sum, max_y - min_y);
 
 		/* 画像を作る */
 		__drawHistgram__(histgram, row_sum, col_sum, circumscribed_point);
@@ -464,6 +501,22 @@ public:
 		vector< pair<Point, Point> > a;
 
 		return a;
+	}
+
+	static Mat SearchNearHue(const Mat src, int threshold)
+	{
+		Mat hue_image = GetHue(src);
+		Mat dst = Mat::zeros(hue_image.size(), hue_image.type());
+
+		for (int y = 0; y < hue_image.rows; y++) {
+			for (int x = 0; x < hue_image.cols; x++) {
+				if (__is_nearhue__(hue_image.at<uchar>(y, x), threshold)) {
+					dst.at<uchar>(y, x) = 255;
+				}
+			}
+		}
+
+		return dst.clone();
 	}
 
 
@@ -524,7 +577,7 @@ private:
 		}
 	}
 
-	static vector<pair<int, int>> __ComputeInterval__(vector<int> histgram)
+	static vector<pair<int, int>> __ComputeIntervalX__(vector<int> histgram, int width)
 	{
 		bool is_series = false;
 		int interval_begin = 0,
@@ -538,6 +591,39 @@ private:
 					interval.push_back(
 						make_pair(interval_begin, interval_end)
 						);
+				}
+
+				is_series = false;
+			}
+			else {
+				if (!is_series) {
+					interval_begin = i;
+				}
+
+				is_series = true;
+			}
+		}
+
+		return interval;
+	}
+
+	static vector<pair<int, int>> __ComputeIntervalY__(vector<int> histgram, int height)
+	{
+		bool is_series = false;
+		int interval_begin = 0,
+			interval_end = 0;
+		vector<pair<int, int>> interval;
+
+		for (int i = 0; i < histgram.size(); i++) {
+			if (histgram[i] < 5) {
+				if (is_series) {
+					interval_end = i - 1;
+					if (interval_end - interval_begin > height * 0.1) {
+						interval.push_back(
+							make_pair(interval_begin, interval_end)
+							);
+					}
+
 				}
 
 				is_series = false;
@@ -587,18 +673,44 @@ private:
 		}
 	}
 
+	static int __is_nearhue__(int hue, int threshold)
+	{
+		int diff;
+
+		for (int i = 0; i < REPRESENTATIVE_COLOR.size(); i++) {
+
+			if (abs(REPRESENTATIVE_HUE[i] - hue) > MAX_HUE / 2) {
+				if (REPRESENTATIVE_HUE[i] > hue) {
+					diff = hue + MAX_HUE - REPRESENTATIVE_HUE[i];
+				}
+				else {
+					diff = REPRESENTATIVE_HUE[i] + MAX_HUE - hue;
+				}
+			}
+			else {
+				diff = abs(REPRESENTATIVE_HUE[i] - hue);
+			}
+
+			if (diff < threshold) {
+				return true;
+			}
+		}
+
+		return false;
+	}
 };
 
 int main(int argc, const char* argv[])
 {
-	vector<int> images = { 10 };
+	vector<int> images = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 
-	for (int i = 0; i < images.size(); i++) {
+	for (int i = 0; i <= images.size(); i++) {
 
-		int image_no = images[i];
+		stringstream stream;
+		stream << setw(3) << setfill('0') << images[i];
 
-		//string image_path = "C://Users/sst/Pictures/res/p" + to_string(image_no) + ".jpg";
-		string image_path = "C://Users/NEC-PCuser/Pictures/res/p" + to_string(image_no) + ".jpg";
+		string image_path = "C://Users/sst/Pictures/acresearch_p/p" + stream.str() + ".jpg";
+		//string image_path = "C://Users/NEC-PCuser/Pictures/res/p" + to_string(image_no) + ".jpg";
 
 		Mat orig_image,
 			orig_image_grayscale,
@@ -618,10 +730,17 @@ int main(int argc, const char* argv[])
 		process_image = resized_image_grayscale.clone();
 
 		/* 元画像を表示 */
-		imshow("元画像", resized_image);
-		waitKey();
+		//imshow("元画像", resized_image);
+		//waitKey();
 
-		/*  */
+		//imshow("元画像2", GuideBoard::GetHue(resized_image));
+		//waitKey();
+
+		// 遅いしたいした結果が出ないので削除
+		// Mat color_pickupped_image = GuideBoard::SearchNearHue(resized_image, 3);
+		// Utilities::imageShow("色相が近い画素の抽出.png", color_pickupped_image, IMWRITE_FALSE, WAIT_TRUE);
+
+		/* グレースケール画像をぼかす */
 		Mat blured_resized_image_grayscale;
 		GaussianBlur(resized_image_grayscale, blured_resized_image_grayscale, Size(7, 7), 0);
 
@@ -635,17 +754,16 @@ int main(int argc, const char* argv[])
 		Mat hue_image = GuideBoard::GetHue(blured_resized_image);
 		Mat saturation_image = GuideBoard::GetSaturation(blured_resized_image);
 
-		imshow("彩度", saturation_image);
-		waitKey();
+		//Utilities::imageShow("彩度.png", saturation_image, IMWRITE_FALSE, WAIT_TRUE);
 
 		Mat cannied_gray,
 			cannied_hue;
 
-		Canny(gray_image, cannied_gray, 50, 75);
-		Canny(hue_image, cannied_hue, 50, 75);
+		Canny(gray_image, cannied_gray, 40, 60);
+		Canny(hue_image, cannied_hue, 40, 60);
 
-		imshow("色相画像のエッジ（彩度の考慮前）", cannied_hue);
-		waitKey();
+		//Utilities::imageShow("gray.png", cannied_gray, IMWRITE_TRUE, WAIT_TRUE);
+		//Utilities::imageShow("hue.png", cannied_hue, IMWRITE_TRUE, WAIT_TRUE);
 
 		/* 画像中で彩度が低い部分にエッジがあればそれを消す */
 		Mat sat_filtered_hue;
@@ -653,24 +771,35 @@ int main(int argc, const char* argv[])
 
 		GuideBoard::RemoveEdgeOfLowSat(cannied_hue, saturation_image, sat_filtered_hue, 10, delete_point);
 
-		imshow("色相画像のエッジ（彩度の考慮後）", sat_filtered_hue);
-		waitKey(); //imwrite("satAfter_" + to_string(i) + ".jpg", ~hueEdgeOfSat);
-
+		//Utilities::imageShow("色相画像のエッジ（彩度の考慮後）.png", sat_filtered_hue, IMWRITE_FALSE, WAIT_TRUE);
 
 		/* グレースケールのエッジ画像と色相エッジ画像のエッジ部分を広げる（dilate） */
 		Mat delated_cannied_gray,
 			delated_sat_filtered_hue;
 
-		dilate(cannied_gray, cannied_gray, Mat());
+		dilate(cannied_gray, delated_cannied_gray, Mat());
 		dilate(sat_filtered_hue, delated_sat_filtered_hue, Mat());
 
+		//Utilities::imageShow("dilate.png", delated_cannied_gray, IMWRITE_FALSE, WAIT_TRUE);
+
 		/* 4点で表される領域の座標 */
-		vector< vector< Point > > apexes = GuideBoard::FindApexesByEdge(delated_sat_filtered_hue.clone(), 1000);
+		vector< vector< Point > > apexes = GuideBoard::FindApexesByEdge(delated_cannied_gray.clone(), 1000, resized_image);
+		//vector< vector< Point > > apexes = GuideBoard::FindApexesByEdge(delated_sat_filtered_hue.clone(), 1000);
 
 		if (apexes.size() == 0) {
 			cout << "四角形が検出できませんでした\n";
 			return 0;
 		}
+
+		Mat polyline_over_orig_image = resized_image.clone();
+		polylines(polyline_over_orig_image, apexes, true, Scalar(255, 0, 0), 1);
+		Utilities::imageShow("検出した四角形.png", polyline_over_orig_image, IMWRITE_FALSE, WAIT_TRUE);
+
+
+
+		continue;
+
+
 
 		vector<vector<int>> valueHists;
 
